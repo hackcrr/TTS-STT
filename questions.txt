@@ -1,0 +1,9 @@
+Q1	To begin with, please describe a marketing campaign by a clothing brand that you found particularly effective.	首先，请描述一个你认为非常有效的服装品牌营销活动。
+Q2	Moreover, what were the main channels used in this promotion, such as social media or physical events?	此外，这次推广的主要渠道是什么？（比如社交媒体或线下活动）
+Q3	In terms of creativity, what was the core message or visual style that grabbed the audience's attention?	在创意方面，吸引观众注意力的核心信息或视觉风格是什么？
+Q4	Furthermore, how did this campaign successfully build an emotional connection with its target consumers?	而且，这次活动是如何成功地与目标消费者建立情感联系的？
+Q5	Moving on, what kind of measurable results did the brand achieve through this specific promotion?	接着看，品牌通过这次特定推广取得了什么样的量化成果？
+Q6	In that regard, how did influencer marketing or celebrity endorsements play a role in this campaign?	在这点上，网红营销或明星代言在活动中起到了什么作用？
+Q7	Looking closer, how did the campaign stay consistent with the brand's overall long-term image?	仔细观察，这次活动是如何与品牌的长期整体形象保持一致的？
+Q8	Finally, if you were to improve one thing about this campaign, what would it be and why?	最后，如果你要改进这次活动中的一个环节，会是什么？为什么？
+Q9	That was a very insightful analysis of brand marketing. Thank you for your time.	(结束语) 对品牌营销的分析非常深刻。感谢你的参与。
