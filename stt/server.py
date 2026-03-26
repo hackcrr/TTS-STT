@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,6 +15,13 @@ import whisper
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from env_utils import env_int, load_env_files
+
+load_env_files(ROOT_DIR)
 
 FFMPEG_DIR = os.environ.get(
     "FFMPEG_DIR",
@@ -24,6 +32,8 @@ if FFMPEG_DIR and Path(FFMPEG_DIR).exists():
 
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "small")
 DEFAULT_LANGUAGE = os.environ.get("WHISPER_LANG", "en")
+STT_HOST = os.environ.get("STT_HOST", "0.0.0.0")
+STT_PORT = env_int("STT_PORT", 5001)
 DEBUG = os.environ.get("FLASK_DEBUG", "1") == "1"
 
 app = Flask(__name__)
@@ -35,8 +45,8 @@ print("Whisper model loaded.")
 
 
 def normalize_language(language: str | None) -> str | None:
-    language = (language or DEFAULT_LANGUAGE or "").strip().lower()
-    return language or None
+    value = (language or DEFAULT_LANGUAGE or "").strip().lower()
+    return value or None
 
 
 def convert_webm_to_wav(webm_path: Path, wav_path: Path) -> None:
@@ -58,17 +68,18 @@ def convert_webm_to_wav(webm_path: Path, wav_path: Path) -> None:
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("未找到 ffmpeg，无法转换 webm 音频。") from exc
+        raise RuntimeError("ffmpeg was not found and is required for webm conversion.") from exc
 
     if result.returncode != 0:
-        message = result.stderr.strip() or "ffmpeg 转换失败。"
+        message = result.stderr.strip() or "ffmpeg conversion failed."
         raise RuntimeError(message)
 
 
 def transcribe_audio(audio_path: Path, language: str | None = None) -> dict:
-    options = {"fp16": False}
+    options: dict[str, object] = {"fp16": False}
     normalized_language = normalize_language(language)
     if normalized_language:
         options["language"] = normalized_language
@@ -93,6 +104,14 @@ def validate_remote_url(url: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+def transcribe_uploaded_path(input_path: Path, language: str | None) -> dict:
+    if input_path.suffix.lower() == ".webm":
+        wav_path = input_path.with_suffix(".wav")
+        convert_webm_to_wav(input_path, wav_path)
+        return transcribe_audio(wav_path, language)
+    return transcribe_audio(input_path, language)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify(
@@ -101,6 +120,8 @@ def health():
             "service": "stt",
             "model": MODEL_SIZE,
             "language": DEFAULT_LANGUAGE,
+            "host": STT_HOST,
+            "port": STT_PORT,
         }
     )
 
@@ -108,11 +129,11 @@ def health():
 @app.route("/api/stt", methods=["POST"])
 def speech_to_text():
     if "file" not in request.files:
-        return jsonify({"error": "请提供音频文件。"}), 400
+        return jsonify({"error": "An audio file is required."}), 400
 
     uploaded_file = request.files["file"]
     if not uploaded_file.filename:
-        return jsonify({"error": "文件名不能为空。"}), 400
+        return jsonify({"error": "Filename cannot be empty."}), 400
 
     language = normalize_language(request.form.get("language"))
     suffix = Path(uploaded_file.filename.lower()).suffix or ".bin"
@@ -122,20 +143,10 @@ def speech_to_text():
         input_path = temp_path / f"input{suffix}"
         uploaded_file.save(input_path)
 
-        if suffix == ".webm":
-            wav_path = temp_path / "converted.wav"
-            try:
-                convert_webm_to_wav(input_path, wav_path)
-            except RuntimeError as exc:
-                return jsonify({"error": str(exc)}), 500
-            audio_path = wav_path
-        else:
-            audio_path = input_path
-
         try:
-            result = transcribe_audio(audio_path, language)
+            result = transcribe_uploaded_path(input_path, language)
         except Exception as exc:
-            return jsonify({"error": f"转录失败: {exc}"}), 500
+            return jsonify({"error": f"Transcription failed: {exc}"}), 500
 
     return jsonify(
         {
@@ -154,15 +165,15 @@ def speech_to_text_url():
     language = normalize_language(data.get("language"))
 
     if not url:
-        return jsonify({"error": "请提供音频 URL。"}), 400
+        return jsonify({"error": "A remote audio URL is required."}), 400
     if not validate_remote_url(url):
-        return jsonify({"error": "仅支持 http/https 音频 URL。"}), 400
+        return jsonify({"error": "Only http/https URLs are supported."}), 400
 
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
     except Exception as exc:
-        return jsonify({"error": f"下载失败: {exc}"}), 400
+        return jsonify({"error": f"Download failed: {exc}"}), 400
 
     suffix = Path(urlparse(url).path).suffix or ".mp3"
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -170,20 +181,10 @@ def speech_to_text_url():
         input_path = temp_path / f"input{suffix}"
         input_path.write_bytes(response.content)
 
-        if suffix == ".webm":
-            wav_path = temp_path / "converted.wav"
-            try:
-                convert_webm_to_wav(input_path, wav_path)
-            except RuntimeError as exc:
-                return jsonify({"error": str(exc)}), 500
-            audio_path = wav_path
-        else:
-            audio_path = input_path
-
         try:
-            result = transcribe_audio(audio_path, language)
+            result = transcribe_uploaded_path(input_path, language)
         except Exception as exc:
-            return jsonify({"error": f"转录失败: {exc}"}), 500
+            return jsonify({"error": f"Transcription failed: {exc}"}), 500
 
     return jsonify(
         {
@@ -196,10 +197,8 @@ def speech_to_text_url():
 
 
 if __name__ == "__main__":
-    host = os.environ.get("STT_HOST", "0.0.0.0")
-    port = int(os.environ.get("STT_PORT", "5001"))
-
-    print(f"STT 服务启动: http://127.0.0.1:{port}")
-    print(f"模型: {MODEL_SIZE}")
-    print(f"默认语言: {DEFAULT_LANGUAGE}")
-    app.run(host=host, port=port, debug=DEBUG)
+    print(f"STT server running at http://127.0.0.1:{STT_PORT}")
+    print(f"Listening on {STT_HOST}:{STT_PORT}")
+    print(f"Model: {MODEL_SIZE}")
+    print(f"Default language: {DEFAULT_LANGUAGE}")
+    app.run(host=STT_HOST, port=STT_PORT, debug=DEBUG)
