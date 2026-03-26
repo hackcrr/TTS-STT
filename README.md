@@ -1,195 +1,337 @@
-# TTS-STT 语音工具台
+# TTS-STT Voice Toolkit
 
-一个基于 Flask + React 的语音合成与识别工具，支持文本转语音、对话合成和语音转文本功能。
+一个基于 Flask + React 的语音工具项目，提供：
 
-## 功能特性
+- 文本转语音（TTS）
+- 对话语音合成
+- 语音转文本（STT / Whisper）
+- MCP 封装，方便接入 Claude Code、Claude Desktop 或其他 MCP Client
 
-- **文本转语音 (TTS)** - 使用 Microsoft Edge TTS，支持多种语音和语速调节
-- **对话合成** - 输入对话文本，自动识别男女角色并生成长语音
-- **语音转文本 (STT)** - 使用 OpenAI Whisper 进行语音识别
-- **Web 界面** - 现代化的 React 前端，支持局域网访问
+## 功能概览
+
+### 1. 文本转语音
+
+- 使用 `edge-tts`
+- 支持多种英文音色
+- 支持语速、音高调整
+- 支持 Q&A 文本、段落文本、整段文本
+
+### 2. 对话合成
+
+- 输入 `Speaker: text` 格式的对话
+- 自动识别男女角色，或按顺序交替分配
+- 输出一段完整对话音频
+
+### 3. 语音转文本
+
+- 使用 OpenAI Whisper
+- 支持上传本地音频文件
+- 支持传入远程音频 URL
+
+### 4. Web UI
+
+- 前端是单文件 React 页面
+- UI 不再写死某台机器的 IP
+- TTS / STT 地址支持运行时自动推导和环境变量覆盖
+
+### 5. MCP 封装
+
+- 提供 `stdio` MCP 服务
+- 可把现有 HTTP 接口封装成 MCP 工具
+- 可供本机或局域网内其他机器的 MCP Client 使用
 
 ## 项目结构
 
+```text
+.
+├─ web/
+│  ├─ server.py
+│  ├─ requirements.txt
+│  └─ static/
+│     └─ index.html
+├─ stt/
+│  ├─ server.py
+│  └─ requirements.txt
+├─ sessions/
+├─ env_utils.py
+├─ mcp_server.py
+├─ start.bat
+├─ requirements.txt
+├─ .env.example
 ```
-├── web/                    # TTS 服务 (端口 5000)
-│   ├── server.py           # Flask 后端
-│   ├── requirements.txt    # Python 依赖
-│   └── static/
-│       └── index.html      # React 前端
-├── stt/                    # STT 服务 (端口 5001)
-│   ├── server.py           # Flask + Whisper 后端
-│   └── requirements.txt    # Python 依赖
-├── sessions/               # 生成的音频文件存储目录
-├── start.bat               # Windows 启动脚本
-├── tts.py                  # 命令行 TTS 工具
-└── test_stt.py             # STT API 测试脚本
-```
 
-## 快速开始
+## 技术栈
 
-### 环境要求
+- Backend: Flask, Flask-CORS
+- TTS: edge-tts
+- STT: openai-whisper
+- Frontend: React 18 (CDN)
+- MCP: stdio MCP wrapper
 
+## 环境要求
+
+- Windows 10 / 11
 - Python 3.10+
-- ffmpeg (用于音频处理)
+- ffmpeg
 
-### 安装依赖
+## 安装依赖
 
-```bash
-# TTS 服务
+### TTS 服务
+
+```bat
 cd web
-pip install -r requirements.txt
-
-# STT 服务
-cd ../stt
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-### 启动服务
+### STT 服务
 
-**Windows:**
-```bash
-# 双击运行
+```bat
+cd stt
+python -m pip install -r requirements.txt
+```
+
+### MCP 包装层
+
+```bat
+cd D:\语音合成
+python -m pip install -r requirements.txt
+```
+
+## 环境变量
+
+先复制一份配置文件：
+
+```bat
+copy .env.example .env
+```
+
+常用配置项：
+
+```env
+FLASK_DEBUG=1
+
+TTS_HOST=0.0.0.0
+TTS_PORT=5000
+
+STT_HOST=0.0.0.0
+STT_PORT=5001
+
+WHISPER_MODEL=small
+WHISPER_LANG=en
+
+MCP_TTS_BASE_URL=http://127.0.0.1:5000
+MCP_STT_BASE_URL=http://127.0.0.1:5001
+```
+
+可选公网 / 局域网覆盖项：
+
+```env
+TTS_PUBLIC_BASE_URL=
+STT_PUBLIC_BASE_URL=
+STT_PUBLIC_HOST=
+STT_PUBLIC_SCHEME=http
+```
+
+## 自动 IP 说明
+
+前端现在不再把 API 写死为固定 IP。
+
+默认行为：
+
+- TTS API 使用相对路径 `/api`
+- STT API 使用“当前浏览器访问的主机名 + `STT_PORT`”
+
+例如你在另一台机器上通过：
+
+```text
+http://192.168.1.25:5000
+```
+
+打开页面，那么前端默认会请求：
+
+- `http://192.168.1.25:5000/api`
+- `http://192.168.1.25:5001/api`
+
+如果你需要固定对外地址，再配置：
+
+- `TTS_PUBLIC_BASE_URL`
+- `STT_PUBLIC_BASE_URL`
+
+## 启动方式
+
+### 一键启动
+
+```bat
 start.bat
 ```
 
-**手动启动:**
-```bash
-# 终端 1 - TTS 服务
+### 手动启动
+
+TTS:
+
+```bat
 cd web
 python server.py
+```
 
-# 终端 2 - STT 服务
+STT:
+
+```bat
 cd stt
 python server.py
 ```
 
-### 访问地址
+### 健康检查
 
-- **前端界面**: http://127.0.0.1:5000
-- **TTS API**: http://127.0.0.1:5000/api
-- **STT API**: http://127.0.0.1:5001/api
+- TTS: `http://127.0.0.1:5000/health`
+- STT: `http://127.0.0.1:5001/health`
 
-如需局域网访问，修改 `web/static/index.html` 中的 `API_BASE` 和 `STT_BASE` 地址。
+## Web 页面
 
-## API 接口
+默认访问：
 
-### TTS 文本合成
+```text
+http://127.0.0.1:5000
+```
 
-```bash
-POST /api/synthesize
-Content-Type: application/json
+页面包含：
 
+- 文本合成
+- 对话合成
+- 语音转文本
+- 历史记录
+
+## API 简介
+
+### 1. 文本合成
+
+`POST /api/synthesize`
+
+```json
 {
-  "text": "Q1\tHello world\t你好世界\nQ2\tHow are you?\t你好吗？",
+  "text": "Q1\tHello world\t你好世界\nQ2\tHow are you?\t你好吗",
   "topic": "my_topic",
   "voice": "jenny",
-  "rate": "+0%"
+  "rate": "+0%",
+  "pitch": "+0Hz"
 }
 ```
 
-### TTS 对话合成
+### 2. 对话合成
 
-```bash
-POST /api/dialogue
-Content-Type: application/json
+`POST /api/dialogue`
 
+```json
 {
   "text": "Mark: Hello.\nElena: Hi there.",
   "topic": "dialogue_topic",
   "maleVoice": "guy",
   "femaleVoice": "jenny",
-  "rate": "+0%"
+  "rate": "+0%",
+  "pitch": "+0Hz"
 }
 ```
 
-### STT 语音识别
+### 3. 语音转文本
 
-```bash
-POST /api/stt
-Content-Type: multipart/form-data
+`POST /api/stt`
 
-file: <audio file>
-language: en
+表单字段：
+
+- `file`
+- `language`
+
+### 4. 其他接口
+
+- `GET /api/voices`
+- `GET /api/sessions`
+- `DELETE /api/sessions/{topic}`
+- `GET /api/download/{topic}`
+- `GET /api/download/{topic}/{file}`
+- `GET /health`
+
+## 支持的 MCP 工具
+
+`mcp_server.py` 当前提供这些工具：
+
+- `list_voices`
+- `synthesize_text`
+- `synthesize_dialogue`
+- `list_sessions`
+- `delete_session`
+- `transcribe_file`
+- `transcribe_url`
+
+## MCP 启动
+
+```bat
+python mcp_server.py
 ```
 
-### 更多接口
+## Claude Desktop / 其他 MCP Client 配置示例
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/voices` | 获取可用语音列表 |
-| GET | `/api/sessions` | 获取历史会话列表 |
-| GET | `/api/download/{topic}` | 下载会话 ZIP |
-| GET | `/api/download/{topic}/{file}` | 下载单个文件 |
-| DELETE | `/api/sessions/{topic}` | 删除会话 |
-| GET | `/health` | STT 健康检查 |
+如果本机 Python 在：
 
-## 支持的语音
-
-### 英文语音
-
-| 名称 | 性别 | 说明 |
-|------|------|------|
-| jenny | 女 | 自然流畅 |
-| guy | 男 | 自然流畅 |
-| aria | 女 | 自然 |
-| davis | 男 | 自然 |
-| brian | 男 | 自然 |
-| emma | 女 | 自然 |
-
-### 中文语音
-
-| 名称 | 性别 | 说明 |
-|------|------|------|
-| xiaoxiao | 女 | 自然流畅 |
-| yunxi | 男 | 自然流畅 |
-| yunjian | 男 | 新闻播报风格 |
-
-## 输入格式
-
-### TTS 支持的格式
-
-**Q&A 格式:**
-```
-Q1	Hello world	你好世界
-Q2	How are you?	你好吗？
+```text
+C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe
 ```
 
-**纯英文段落:**
-```
-This is the first paragraph.
+可以这样配置：
 
-This is the second paragraph.
-```
-
-**单段文本:**
-```
-Just paste your English text here.
-```
-
-### 对话合成格式
-
-**带说话人定义:**
-```
-Mark(男), Elena(女)
-Mark: Hello, how are you?
-Elena: I'm fine, thanks!
-```
-
-**自动识别:**
-```
-Mark: Hello, how are you?
-Elena: I'm fine, thanks!
+```json
+{
+  "mcpServers": {
+    "tts-stt": {
+      "command": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "args": [
+        "D:\\语音合成\\mcp_server.py"
+      ],
+      "cwd": "D:\\语音合成",
+      "env": {
+        "MCP_TTS_BASE_URL": "http://127.0.0.1:5000",
+        "MCP_STT_BASE_URL": "http://127.0.0.1:5001"
+      }
+    }
+  }
+}
 ```
 
-## 技术栈
+## 跨电脑使用 MCP
 
-- **后端**: Flask, Flask-CORS
-- **TTS**: edge-tts (Microsoft Edge TTS)
-- **STT**: OpenAI Whisper
-- **前端**: React 18 (CDN)
-- **音频处理**: ffmpeg
+可以，但推荐这样做：
 
-## 许可证
+### 服务机
 
-MIT License
+- 启动 `web/server.py`
+- 启动 `stt/server.py`
+- 开放 `5000` 和 `5001` 端口
+
+### 客户机
+
+- 本地运行自己的 `mcp_server.py`
+- 把 `MCP_TTS_BASE_URL` / `MCP_STT_BASE_URL` 指向服务机 IP
+
+例如：
+
+```json
+{
+  "mcpServers": {
+    "tts-stt": {
+      "command": "python",
+      "args": [
+        "D:\\your-local-copy\\mcp_server.py"
+      ],
+      "cwd": "D:\\your-local-copy",
+      "env": {
+        "MCP_TTS_BASE_URL": "http://192.168.1.25:5000",
+        "MCP_STT_BASE_URL": "http://192.168.1.25:5001"
+      }
+    }
+  }
+}
+```
+
+## 备注
+
+- 当前前端仍是单文件 React 页面，适合快速部署和内网使用
+- 如果后续要做更复杂的前端迭代，建议再拆分为正式工程化结构
